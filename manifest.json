@@ -1,0 +1,16 @@
+{
+  "short_name": "WembleyHub",
+  "name": "Wembley Gaming Hub Management System",
+  "icons": [
+    {
+      "src": "https://flaticon.com",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "landscape"
+}
