@@ -4,10 +4,10 @@
 </head><body class="bg-slate-950 text-slate-100 min-h-screen">
 <div id="login-screen" class="min-h-screen grid place-items-center p-5"><form id="login-form" class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-7">
 <h1 id="login-title" class="text-3xl font-black mb-2">Attendant Login</h1><p class="text-slate-400 mb-6">Wembley Gaming Hub</p>
-<input id="login-user" required placeholder="Username" class="w-full mb-3 bg-slate-800 rounded-lg px-4 py-3">
-<input id="login-pass" required type="password" placeholder="Password" class="w-full mb-5 bg-slate-800 rounded-lg px-4 py-3">
-<button class="w-full py-3 bg-indigo-600 rounded-lg font-bold">Login</button></form></div>
+<input id="login-user" required placeholder="Username" autocomplete="username" class="w-full mb-3 bg-slate-800 rounded-lg px-4 py-3">
+<input id="login-pass" required type="password" placeholder="Password" autocomplete="current-password" class="w-full mb-5 bg-slate-800 rounded-lg px-4 py-3">
+<button type="submit" class="w-full py-3 bg-indigo-600 rounded-lg font-bold">Login</button></form></div>
 <div id="app" class="hidden"><header class="bg-slate-900 border-b border-slate-800"><div class="max-w-7xl mx-auto px-5 py-4 flex justify-between items-center"><div><h1 class="text-2xl font-black">🎮 Wembley Gaming Hub</h1><p class="text-slate-400 text-sm">Attendant Dashboard</p></div><button onclick="logout()" class="px-4 py-2 bg-slate-700 rounded-lg font-bold">Logout</button></div></header>
 <main class="max-w-7xl mx-auto px-5 py-7"><h2 class="text-3xl font-black mb-1">Gaming Stations</h2><p class="text-slate-400 mb-6">PS5 is FC-only. PS4 FC is charged per game; other PS4 games are charged per minute.</p>
 <div id="stations-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-5"></div><div class="mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-5"><div class="flex justify-between"><div><b>Offline Sync</b><p id="sync-status" class="text-slate-400 text-sm">Records are stored safely if the internet fails.</p></div><button onclick="syncLogs()" class="px-4 py-2 bg-emerald-600 rounded-lg font-bold">Sync Now</button></div></div></main></div><div id="toast" class="hidden"></div>
-<script src="common.js"></script><script>setupLogin("attendant");if(requireLogin("attendant")){renderStations();syncLogs();setInterval(updateTimers,1000);}</script></body></html>
+<script src="common.js"></script><script>initAttendant();</script></body></html>
