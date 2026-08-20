@@ -1,6 +1,6 @@
 /* Wembley Gaming Hub — cross-device login edition */
-const DB_URL = "https://ihepfikmvtplmlgdtbix.supabase.co";
-const DB_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaWttdnRwbG1sbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
+const DB_URL = "https://ihepufhkmtplmllgtbix.supabase.co";
+const DB_KEY = "sb_publishable_oYfDoonB9xD1gzsUBZPINA_DsvWpCxo";
 let db = null;
 try { db = window.supabase.createClient(DB_URL, DB_KEY); } catch(e) { console.error(e); }
 
