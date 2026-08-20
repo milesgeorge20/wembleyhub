@@ -11,7 +11,7 @@
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
 
   <script>
-    // FIXED LINK STRINGS SPECIFICALLY LINKED TO YOUR HUB DATABASE
+    // FIXED SECURE BACKEND DB LINKS STRINGS
     const SUPABASE_URL = "https://supabase.co"; 
     const SUPABASE_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaGttdnRwbG1sbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
     
@@ -207,9 +207,9 @@
               <div class="space-y-2">
                 ${st.type === 'PS5' ? `
                   <button onclick="startSession('${st.id}', 'PS5', 'FC Match')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition font-semibold rounded-lg text-sm text-white">
-                    Start FC Match (KSh ${settings.ps5_fc_rate})
+                    Start FC Match (KSh 50)
                   </button>
                 ` : `
                   <button onclick="startSession('${st.id}', 'PS4', 'FC Match')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition font-semibold rounded-lg text-sm text-white">
-                    Start FC Match (KSh ${settings.ps4_fc_rate})
+                    Start FC Match (KSh 30)
                   </button>
