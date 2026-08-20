@@ -9,7 +9,7 @@ const DEFAULT_GAMES=[
  {name:"NBA 2K",rate:2},{name:"eFootball",rate:2},{name:"Minecraft",rate:2},
  {name:"Need for Speed",rate:2},{name:"Other",rate:2}
 ];
-const DEFAULT_SETTINGS={ps5_fc_rate:50,ps4_fc_rate:30,buffer_minutes:4,games:DEFAULT_GAMES.map(g=>({...g}))};
+const DEFAULT_SETTINGS={ps5_fc_rate:50,ps5_continuous_rate:50,ps4_fc_rate:30,buffer_minutes:4,games:DEFAULT_GAMES.map(g=>({...g}))};
 let settings={...DEFAULT_SETTINGS,games:DEFAULT_SETTINGS.games.map(g=>({...g}))};
 let active=JSON.parse(localStorage.getItem("wembley_active_sessions")||"{}");
 let endedTimers={};
@@ -100,11 +100,11 @@ function timerText(s){
  const ms=s.minutes?Math.max(0,s.minutes*60000-elapsed):elapsed,total=Math.floor(ms/1000),h=Math.floor(total/3600),m=Math.floor(total%3600/60),sec=total%60;
  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
 }
-function updateTimers(){Object.entries(active).forEach(([id,s])=>{const el=document.getElementById("timer-"+id);if(el)el.textContent=timerText(s);if(s.minutes){const left=s.minutes*60000-(Date.now()-new Date(s.startTime).getTime());if(left<=0&&!endedTimers[id]){endedTimers[id]=true;beep();toast(`${s.type} ${s.gameMode} time is finished!`,"error");const badge=document.getElementById("done-"+id);if(badge)badge.classList.remove("hidden");}}});}
+function updateTimers(){Object.entries(active).forEach(([id,s])=>{const el=document.getElementById("timer-"+id);if(el)el.textContent=timerText(s);const elapsed=Math.max(0,Date.now()-new Date(s.startTime).getTime());if(s.minutes){const left=s.minutes*60000-elapsed;if(left<=0&&!endedTimers[id]){endedTimers[id]=true;beep();toast(`${s.type} ${s.gameMode} time is finished!`,"error");const badge=document.getElementById("done-"+id);if(badge)badge.classList.remove("hidden");}}else if(s.gameMode==="PS5 Continuous Play"){const block=Math.floor(elapsed/900000);if(block>0 && !endedTimers[id])endedTimers[id]=0;if(block>0 && block>(endedTimers[id]||0)){endedTimers[id]=block;beep();toast(`PS5 Continuous Play: ${block} × 15-minute block(s) completed.`,"info");}}});}
 
 async function endSession(id){
  const s=active[id];if(!s)return;const end=new Date(),start=new Date(s.startTime),duration=Math.max(1,Math.round((end-start)/60000));
- const amount=s.gameMode==="FC Match"?(s.type==="PS5"?settings.ps5_fc_rate:settings.ps4_fc_rate):duration*(s.rate??2);
+ const amount=s.gameMode==="FC Match"?(s.type==="PS5"?settings.ps5_fc_rate:settings.ps4_fc_rate):s.gameMode==="PS5 Continuous Play"?(Math.ceil(duration/15)*settings.ps5_continuous_rate):duration*(s.rate??2);
  const log={attendant_id:"Wembley_Attendant",console_name:s.type,game_mode:s.gameMode,start_time:s.startTime,end_time:end.toISOString(),duration_minutes:duration,calculated_amount_ksh:amount};
  delete active[id];saveState();renderStations();let ok=false;
  if(db){try{const r=await db.from("session_logs").insert([log]);ok=!r.error;}catch(e){}}
@@ -117,7 +117,7 @@ function renderStations(){
  const grid=document.getElementById("stations-grid");if(!grid)return;
  const stations=[{id:"ps5_1",type:"PS5",name:"PS5 - Station 1"},{id:"ps4_1",type:"PS4",name:"PS4 - Station 2"},{id:"ps4_2",type:"PS4",name:"PS4 - Station 3"}];
  grid.innerHTML=stations.map(st=>{const s=active[st.id];if(s)return `<div class="bg-slate-900 p-5 rounded-2xl border border-indigo-500/50 shadow-lg"><div class="flex justify-between items-center mb-3"><h3 class="text-xl font-bold">${st.name}</h3><span class="px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-bold animate-pulse">LIVE</span></div><p class="text-slate-400 text-sm">Game: <b class="text-white">${esc(s.gameMode)}</b></p><p id="timer-${st.id}" class="text-3xl font-black text-indigo-400 my-4">${timerText(s)}</p>${s.minutes?`<p id="done-${st.id}" class="hidden text-red-400 font-bold mb-3">🔔 TIME FINISHED — END SESSION</p>`:""}<button onclick="endSession('${st.id}')" class="w-full py-3 bg-red-600 hover:bg-red-500 rounded-lg font-bold">End Session & Bill</button></div>`;
- if(st.type==="PS5")return `<div class="bg-slate-900 p-5 rounded-2xl border border-slate-700"><div class="flex justify-between mb-4"><h3 class="text-xl font-bold">${st.name}</h3><span class="px-2 py-1 bg-slate-800 text-slate-400 rounded-full text-xs font-bold">OPEN</span></div><button onclick="startSession('${st.id}','PS5','FC Match')" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold">⚽ Start FC Match — KSh ${settings.ps5_fc_rate} / game</button></div>`;
+ if(st.type==="PS5")return `<div class="bg-slate-900 p-5 rounded-2xl border border-slate-700"><div class="flex justify-between mb-4"><h3 class="text-xl font-bold">${st.name}</h3><span class="px-2 py-1 bg-slate-800 text-slate-400 rounded-full text-xs font-bold">OPEN</span></div><div class="space-y-3"><button onclick="startSession('${st.id}','PS5','FC Match')" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold">⚽ Start FC Match — KSh ${settings.ps5_fc_rate} / game</button><button onclick="startSession('${st.id}','PS5','PS5 Continuous Play')" class="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold">🎮 Start Continuous Play — KSh ${settings.ps5_continuous_rate} / 15 min</button></div></div>`;
  return `<div class="bg-slate-900 p-5 rounded-2xl border border-slate-700"><div class="flex justify-between mb-4"><h3 class="text-xl font-bold">${st.name}</h3><span class="px-2 py-1 bg-slate-800 text-slate-400 rounded-full text-xs font-bold">OPEN</span></div><div class="space-y-3"><button onclick="startSession('${st.id}','PS4','FC Match')" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold">⚽ Start FC Match — KSh ${settings.ps4_fc_rate} / game</button><select id="game-${st.id}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-3">${gameOptions()}</select><select id="mins-${st.id}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-3"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option><option value="120">120 minutes</option></select><button onclick="startTimedGame('${st.id}')" class="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold">🎮 Start Timed Game</button></div></div>`;
  }).join("");
 }
@@ -131,12 +131,12 @@ async function createCredential(role){
  catch(e){toast("Could not save credentials: "+(e.message||e),"error");}
 }
 function fillSettings(){
- const a=document.getElementById("set-ps5"),b=document.getElementById("set-ps4"),c=document.getElementById("set-buffer");if(a){a.value=settings.ps5_fc_rate;b.value=settings.ps4_fc_rate;c.value=settings.buffer_minutes;}
+ const a=document.getElementById("set-ps5"),pc=document.getElementById("set-ps5-cont"),b=document.getElementById("set-ps4"),c=document.getElementById("set-buffer");if(a){a.value=settings.ps5_fc_rate;pc.value=settings.ps5_continuous_rate;b.value=settings.ps4_fc_rate;c.value=settings.buffer_minutes;}
  const list=document.getElementById("game-list");if(list)list.innerHTML=settings.games.map((g,i)=>`<div class="flex gap-2 mb-2"><input id="gn${i}" value="${esc(g.name)}" class="flex-1 bg-slate-800 rounded px-3 py-2"><input id="gr${i}" type="number" step=".5" value="${g.rate}" class="w-28 bg-slate-800 rounded px-3 py-2"><button onclick="removeGame(${i})" class="px-3 bg-red-600 rounded">×</button></div>`).join("");
 }
 async function saveAdminSettings(){
  if(!Array.isArray(settings.games))settings.games=DEFAULT_GAMES.map(g=>({...g}));
- settings.ps5_fc_rate=Number(document.getElementById("set-ps5").value)||0;settings.ps4_fc_rate=Number(document.getElementById("set-ps4").value)||0;settings.buffer_minutes=Number(document.getElementById("set-buffer").value)||0;
+ settings.ps5_fc_rate=Number(document.getElementById("set-ps5").value)||0;settings.ps5_continuous_rate=Number(document.getElementById("set-ps5-cont").value)||0;settings.ps4_fc_rate=Number(document.getElementById("set-ps4").value)||0;settings.buffer_minutes=Number(document.getElementById("set-buffer").value)||0;
  settings.games=settings.games.map((g,i)=>({name:document.getElementById("gn"+i).value.trim()||g.name,rate:Number(document.getElementById("gr"+i).value)||0}));
  if(!db||!getToken()){toast("Admin session is not valid. Please log in again.","error");return;}
  try{const {data,error}=await db.rpc("wembley_save_settings",{p_token:getToken(),p_settings:settings});if(error)throw error;if(!data?.ok)throw new Error(data?.message||"Not authorized");saveState();fillSettings();renderStations();toast("Prices and games saved on the server.","success");}
