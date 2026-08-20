@@ -1,6 +1,6 @@
 /* Wembley Gaming Hub v2 */
-const DB_URL = "https://ihepfikkmvtplmlgdtbix.supabase.co";
-const DB_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaWtrbXZ0cGxtbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
+const DB_URL = "https://ihepfikmvtplmlgdtbix.supabase.co";
+const DB_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaWttdnRwbG1sbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
 let db = null;
 try { if (window.supabase) db = window.supabase.createClient(DB_URL, DB_KEY); } catch(e) { console.error(e); }
 
@@ -11,9 +11,16 @@ const DEFAULT_GAMES = [
 ];
 
 function getSettings(){
-  return JSON.parse(localStorage.getItem("wembley_settings") || "null") || {
-    ps5_fc_rate:50, ps4_fc_rate:30, buffer_minutes:4, games:DEFAULT_GAMES
-  };
+  const saved = JSON.parse(localStorage.getItem("wembley_settings") || "null");
+  const base = { ps5_fc_rate:50, ps4_fc_rate:30, buffer_minutes:4, games:DEFAULT_GAMES.map(g=>({...g})) };
+  if(!saved){ localStorage.setItem("wembley_settings", JSON.stringify(base)); return base; }
+  const migrated = { ...base, ...saved };
+  if(!Array.isArray(saved.games) || saved.games.length===0){
+    const oldGta = Number(saved.ps4_gta_rate);
+    migrated.games = base.games.map(g => g.name === "GTA V" && Number.isFinite(oldGta) ? {...g, rate:oldGta} : {...g});
+  }
+  localStorage.setItem("wembley_settings", JSON.stringify(migrated));
+  return migrated;
 }
 let settings=getSettings();
 let active=JSON.parse(localStorage.getItem("wembley_active_sessions") || "{}");
@@ -170,14 +177,22 @@ function fillSettings(){
   if(list)list.innerHTML=settings.games.map((g,i)=>`<div class="flex gap-2 mb-2"><input id="gn${i}" value="${esc(g.name)}" class="flex-1 bg-slate-800 rounded px-3 py-2"><input id="gr${i}" type="number" step=".5" value="${g.rate}" class="w-28 bg-slate-800 rounded px-3 py-2"><button onclick="removeGame(${i})" class="px-3 bg-red-600 rounded">×</button></div>`).join("");
 }
 function saveAdminSettings(){
+  if(!Array.isArray(settings.games)) settings.games=DEFAULT_GAMES.map(g=>({...g}));
   settings.ps5_fc_rate=Number(document.getElementById("set-ps5").value)||0;
   settings.ps4_fc_rate=Number(document.getElementById("set-ps4").value)||0;
   settings.buffer_minutes=Number(document.getElementById("set-buffer").value)||0;
   settings.games=settings.games.map((g,i)=>({name:document.getElementById("gn"+i).value.trim()||g.name,rate:Number(document.getElementById("gr"+i).value)||0}));
   saveState();fillSettings();renderStations();toast("Settings saved.","success");
 }
-function addGame(){settings.games.push({name:"New Game",rate:2});saveState();fillSettings();}
-function removeGame(i){if(settings.games.length<=1)return;settings.games.splice(i,1);saveState();fillSettings();}
+function addGame(){
+  if(!Array.isArray(settings.games)) settings.games=DEFAULT_GAMES.map(g=>({...g}));
+  settings.games.push({name:"New Game",rate:2});
+  saveState(); fillSettings();
+}
+function removeGame(i){
+  if(!Array.isArray(settings.games) || settings.games.length<=1)return;
+  settings.games.splice(i,1); saveState(); fillSettings();
+}
 async function adminDashboard(){
   fillSettings();
   const f=document.getElementById("filter").value;
