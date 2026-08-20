@@ -193,12 +193,28 @@ function removeGame(i){
   if(!Array.isArray(settings.games) || settings.games.length<=1)return;
   settings.games.splice(i,1); saveState(); fillSettings();
 }
+function getFilterStartDate(filter){
+  const now=new Date();
+  if(filter==="all") return null;
+  if(filter==="day") return new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(filter==="week"){
+    const d=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const day=d.getDay();
+    const daysSinceMonday=(day+6)%7;
+    d.setDate(d.getDate()-daysSinceMonday);
+    return d;
+  }
+  if(filter==="month") return new Date(now.getFullYear(),now.getMonth(),1);
+  return null;
+}
 async function adminDashboard(){
   fillSettings();
   const f=document.getElementById("filter").value;
+  const filterStart=getFilterStartDate(f);
   let data=[];
-  if(db){try{let q=db.from("session_logs").select("*").order("start_time",{ascending:false});if(f!=="all"){const d=new Date();d.setDate(d.getDate()-(f==="week"?7:30));q=q.gte("start_time",d.toISOString())}const r=await q;if(!r.error)data=r.data||[];}catch(e){}}
+  if(db){try{let q=db.from("session_logs").select("*").order("start_time",{ascending:false});if(filterStart)q=q.gte("start_time",filterStart.toISOString());const r=await q;if(!r.error)data=r.data||[];}catch(e){}}
   if(!data.length)data=JSON.parse(localStorage.getItem("wembley_offline_logs")||"[]");
+  if(filterStart) data=data.filter(x=>new Date(x.start_time)>=filterStart);
   let rev=0,min=0;
   const rows=data.map(x=>{const a=Number(x.calculated_amount_ksh)||0,m=Number(x.duration_minutes)||0;rev+=a;min+=m;return `<tr class="border-b border-slate-800"><td class="p-3">${new Date(x.start_time).toLocaleString()}</td><td class="p-3">${esc(x.console_name)}</td><td class="p-3">${esc(x.game_mode)}</td><td class="p-3">${m} mins</td><td class="p-3 text-emerald-400 font-bold">KSh ${a.toFixed(2)}</td></tr>`}).join("");
   document.getElementById("stat-revenue").textContent="KSh "+rev.toFixed(2);
