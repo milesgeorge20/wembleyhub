@@ -1,121 +1,208 @@
-<!DOCTY<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaming Hub Management</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { color: #00ff87; border-bottom: 2px solid #2a2a32; padding-bottom: 10px; }
-        .card { background: #1a1a24; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .btn { background: #00ff87; color: #121214; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background: #00dd76; }
-        .status { color: #888; font-size: 0.9rem; margin-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wembley Gaming Hub</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://jsdelivr.net"></script>
+  <script src="https://jsdelivr.net"></script>
 </head>
-<body>
-    <div class="container">
-        <h1>Gaming Hub Control Center</h1>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+  <script>
+    const SUPABASE_URL = "https://supabase.co"; 
+    const SUPABASE_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaGttdnRwbG1sbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentRole = 'attendant'; 
+    let activeSessions = JSON.parse(localStorage.getItem('wembley_active_sessions')) || {};
+    
+    let settings = JSON.parse(localStorage.getItem('wembley_settings')) || {
+      ps5_fc_rate: 50,
+      ps4_fc_rate: 30,
+      ps4_gta_rate: 2,
+      buffer_minutes: 4
+    };
+
+    function switchView(role) {
+      currentRole = role;
+      document.getElementById('nav-attendant').className = role === 'attendant' ? 'px-4 py-2 bg-indigo-600 rounded-lg font-bold text-white shadow-md' : 'px-4 py-2 text-slate-400 font-medium';
+      document.getElementById('nav-admin').className = role === 'admin' ? 'px-4 py-2 bg-indigo-600 rounded-lg font-bold text-white shadow-md' : 'px-4 py-2 text-slate-400 font-medium';
+      
+      document.getElementById('attendant-view').classList.toggle('hidden', role !== 'attendant');
+      document.getElementById('admin-view').classList.toggle('hidden', role !== 'admin');
+      
+      if(role === 'admin') loadAdminDashboard();
+    }
+
+    function saveSettings(e) {
+      e.preventDefault();
+      settings.ps5_fc_rate = parseFloat(document.getElementById('set-ps5-fc').value);
+      settings.ps4_fc_rate = parseFloat(document.getElementById('set-ps4-fc').value);
+      settings.ps4_gta_rate = parseFloat(document.getElementById('set-ps4-gta').value);
+      settings.buffer_minutes = parseInt(document.getElementById('set-buffer').value);
+      localStorage.setItem('wembley_settings', JSON.stringify(settings));
+      alert('Settings & Prices updated successfully!');
+      renderAttendantStations();
+    }
+
+    function startSession(stationId, type, gameMode) {
+      activeSessions[stationId] = {
+        type: type,
+        gameMode: gameMode,
+        startTime: new Date().toISOString()
+      };
+      localStorage.setItem('wembley_active_sessions', JSON.stringify(activeSessions));
+      renderAttendantStations();
+    }
+
+    async function stopSession(stationId) {
+      const session = activeSessions[stationId];
+      if (!session) return;
+
+      const endTime = new Date();
+      const startTime = new Date(session.startTime);
+      const durationMs = endTime - startTime;
+      const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+      
+      let amount = 0;
+      if (session.gameMode === 'FC Match') {
+        amount = session.type === 'PS5' ? settings.ps5_fc_rate : settings.ps4_fc_rate;
+      } else {
+        amount = durationMinutes * settings.ps4_gta_rate;
+      }
+
+      const logData = {
+        attendant_id: "Wembley_Attendant",
+        console_name: session.type,
+        game_mode: session.gameMode,
+        start_time: session.startTime,
+        end_time: endTime.toISOString(),
+        duration_minutes: durationMinutes,
+        calculated_amount_ksh: amount
+      };
+
+      delete activeSessions[stationId];
+      localStorage.setItem('wembley_active_sessions', JSON.stringify(activeSessions));
+      renderAttendantStations();
+
+      try {
+        const { error } = await supabase.from('session_logs').insert([logData]);
+        if (error) throw error;
+        alert(`Session Ended!\nTotal Amount Due: KSh ${amount}`);
+      } catch (err) {
+        let offlineLogs = JSON.parse(localStorage.getItem('wembley_offline_logs')) || [];
+        logData.is_synced_offline = true;
+        offlineLogs.push(logData);
+        localStorage.setItem('wembley_offline_logs', JSON.stringify(offlineLogs));
+        alert(`Saved Offline!\nTotal Amount: KSh ${amount}\nWill auto-sync when network returns.`);
+      }
+    }
+
+    async function syncOfflineLogs() {
+      let offlineLogs = JSON.parse(localStorage.getItem('wembley_offline_logs')) || [];
+      if (offlineLogs.length === 0) return;
+
+      try {
+        const { error } = await supabase.from('session_logs').insert(offlineLogs.map(log => {
+          const { is_synced_offline, ...cleanLog } = log;
+          return cleanLog;
+        }));
+        if (!error) {
+          localStorage.removeItem('wembley_offline_logs');
+          if(currentRole === 'admin') loadAdminDashboard();
+        }
+      } catch (e) {
+        console.log("Sync waiting...");
+      }
+    }
+
+    async function loadAdminDashboard() {
+      await syncOfflineLogs();
+      const filter = document.getElementById('admin-time-filter').value;
+      let dateLimit = new Date();
+      if (filter === 'week') dateLimit.setDate(dateLimit.getDate() - 7);
+      if (filter === 'month') dateLimit.setMonth(dateLimit.getMonth() - 1);
+
+      let query = supabase.from('session_logs').select('*');
+      if (filter !== 'all') {
+        query = query.gte('start_time', dateLimit.toISOString());
+      }
+
+      const { data, error } = await query.order('start_time', { ascending: false });
+      if (error) {
+        document.getElementById('audit-table-body').innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-400">Error loading live data logs.</td></tr>`;
+        return;
+      }
+
+      let totalRevenue = 0;
+      let totalMinutes = 0;
+      let tableHtml = '';
+
+      data.forEach(log => {
+        totalRevenue += parseFloat(log.calculated_amount_ksh);
+        totalMinutes += log.duration_minutes || 0;
         
-        <div class="card">
-            <h2>Add Ledger Log (Anti-Fraud)</h2>
-            <p>Test logging a transaction directly into your secure database layout.</p>
-            <button class="btn" onclick="sendLog()">Log Test Session</button>
-            <div id="logStatus" class="status"></div>
-        </div>
+        const isSuspiciousFC = log.game_mode === 'FC Match' && log.duration_minutes > (12 + settings.buffer_minutes);
 
-        <div class="card">
-            <h2>Hardware Relay Control</h2>
-            <p>Test cutting or restoring the video interlocking connection signal.</p>
-            <button class="btn" style="background:#ff4757; color:#fff;" onclick="toggleRelay(1, 'on')">Cut Video (Relay ON)</button>
-            <button class="btn" onclick="toggleRelay(1, 'off')">Restore Video (Relay OFF)</button>
-            <div id="relayStatus" class="status"></div>
-        </div>
-    </div>
+        tableHtml += `
+          <tr class="border-b border-slate-800 ${isSuspiciousFC ? 'bg-red-950/40 text-red-200' : ''}">
+            <td class="p-3 text-sm">${new Date(log.start_time).toLocaleString()}</td>
+            <td class="p-3 font-semibold">${log.console_name}</td>
+            <td class="p-3 text-sm">${log.game_mode}</td>
+            <td class="p-3 ${isSuspiciousFC ? 'font-bold underline' : ''}">${log.duration_minutes} mins</td>
+            <td class="p-3 font-bold text-emerald-400">KSh ${parseFloat(log.calculated_amount_ksh).toFixed(2)}</td>
+            <td class="p-3 text-xs text-slate-400">${isSuspiciousFC ? '⚠️ Exceeded FC Time' : 'OK'}</td>
+          </tr>
+        `;
+      });
 
-    <script>
-        async function sendLog() {
-            const statusDiv = document.getElementById('logStatus');
-            statusDiv.innerText = "Sending log...";
-            try {
-                const response = await fetch('/api/ledger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'Test Session Boot', amount: 5.00, staff_id: 'STAFF_01' })
-                });
-                const data = await response.json();
-                if(data.success) {
-                    statusDiv.innerHTML = `<span style="color:#00ff87">✓ Log saved securely to SQLite! Log ID: ${data.logId}</span>`;
-                }
-            } catch (err) {
-                statusDiv.innerHTML = `<span style="color:#ff4757">Error writing log: ${err.message}</span>`;
-            }
-        }
+      document.getElementById('stat-revenue').innerText = `KSh ${totalRevenue.toFixed(2)}`;
+      document.getElementById('stat-sessions').innerText = data.length;
+      document.getElementById('stat-hours').innerText = (totalMinutes / 60).toFixed(1);
+      document.getElementById('audit-table-body').innerHTML = tableHtml || `<tr><td colspan="6" class="p-4 text-center text-slate-500">No entries recorded.</td></tr>`;
+    }
 
-        function toggleRelay(id, state) {
-            document.getElementById('relayStatus').innerText = `Sending relay command to turn ${state}... (Check terminal for activity)`;
-        }
-    </script>
-</body>
-</html>PE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaming Hub Management</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { color: #00ff87; border-bottom: 2px solid #2a2a32; padding-bottom: 10px; }
-        .card { background: #1a1a24; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .btn { background: #00ff87; color: #121214; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background: #00dd76; }
-        .status { color: #888; font-size: 0.9rem; margin-top: 10px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Gaming Hub Control Center</h1>
-        
-        <div class="card">
-            <h2>Add Ledger Log (Anti-Fraud)</h2>
-            <p>Test logging a transaction directly into your secure database layout.</p>
-            <button class="btn" onclick="sendLog()">Log Test Session</button>
-            <div id="logStatus" class="status"></div>
-        </div>
+    function renderAttendantStations() {
+      const stations = [
+        { id: 'ps5_1', type: 'PS5', name: 'PS5 - Station 1' },
+        { id: 'ps4_1', type: 'PS4', name: 'PS4 - Station 2' },
+        { id: 'ps4_2', type: 'PS4', name: 'PS4 - Station 3' }
+      ];
 
-        <div class="card">
-            <h2>Hardware Relay Control</h2>
-            <p>Test cutting or restoring the video interlocking connection signal.</p>
-            <button class="btn" style="background:#ff4757; color:#fff;" onclick="toggleRelay(1, 'on')">Cut Video (Relay ON)</button>
-            <button class="btn" onclick="toggleRelay(1, 'off')">Restore Video (Relay OFF)</button>
-            <div id="relayStatus" class="status"></div>
-        </div>
-    </div>
-
-    <script>
-        async function sendLog() {
-            const statusDiv = document.getElementById('logStatus');
-            statusDiv.innerText = "Sending log...";
-            try {
-                const response = await fetch('/api/ledger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'Test Session Boot', amount: 5.00, staff_id: 'STAFF_01' })
-                });
-                const data = await response.json();
-                if(data.success) {
-                    statusDiv.innerHTML = `<span style="color:#00ff87">✓ Log saved securely to SQLite! Log ID: ${data.logId}</span>`;
-                }
-            } catch (err) {
-                statusDiv.innerHTML = `<span style="color:#ff4757">Error writing log: ${err.message}</span>`;
-            }
-        }
-
-        function toggleRelay(id, state) {
-            document.getElementById('relayStatus').innerText = `Sending relay command to turn ${state}... (Check terminal for activity)`;
-        }
-    </script>
-</body>
-</html>
+      let html = '';
+      stations.forEach(st => {
+        const active = activeSessions[st.id];
+        if (active) {
+          const start = new Date(active.startTime);
+          html += `
+            <div class="bg-slate-800 p-5 rounded-xl border border-indigo-500/50 shadow-lg">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xl font-bold">${st.name}</h3>
+                <span class="px-2.5 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">Live</span>
+              </div>
+              <p class="text-slate-400 text-sm">Game: <strong class="text-slate-200">${active.gameMode}</strong></p>
+              <p class="text-slate-400 text-sm mb-4">Start Time: <strong class="text-slate-200">${start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</strong></p>
+              <button onclick="stopSession('${st.id}')" class="w-full py-2.5 bg-red-600 hover:bg-red-700 transition text-white font-bold rounded-lg shadow-md">
+                End Session & Bill
+              </button>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-300">${st.name}</h3>
+                <span class="px-2.5 py-1 bg-slate-700 text-slate-400 rounded-full text-xs font-bold uppercase">Open</span>
+              </div>
+              <div class="space-y-2">
+                ${st.type === 'PS5' ? `
+                  <button onclick="startSession('${st.id}', 'PS5', 'FC Match')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition font-semibold rounded-lg text-sm text-white">
+                    Start FC Match (KSh ${settings.ps5_fc_rate})
+                  </button>
+                ` : `
+                  <button onclick="startSession('${st.id}', 'PS4', 'FC Match')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition font-semibold rounded-lg text-sm text-white">
+                    Start FC Match (KSh ${settings.ps4_fc_rate})
+                  </button>
+                  <button onclick="startSession('${st.id}', 'PS4', 'Time-Based (GTA/Racing)')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 transition font-semibold rounded-lg text-sm text-white">
