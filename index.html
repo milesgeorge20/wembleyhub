@@ -6,14 +6,21 @@
   <title>Wembley Gaming Hub</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://jsdelivr.net"></script>
-  <script src="https://jsdelivr.net"></script>
+  <script src="https://tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
 
   <script>
+    // FIXED LINK STRINGS SPECIFICALLY LINKED TO YOUR HUB DATABASE
     const SUPABASE_URL = "https://supabase.co"; 
     const SUPABASE_KEY = "sb_publishable_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZXBmaGttdnRwbG1sbGd0Yml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTk2MzIsImV4cCI6MjA4NzA5NTYzMn0.Y8_pbe95V4z-vU-b-z6Tszv_A8N-u19bWb24zV-f4-8";
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    let supabase;
+    try {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch(e) {
+      console.error("Database connection configuration error:", e);
+    }
 
     let currentRole = 'attendant'; 
     let activeSessions = JSON.parse(localStorage.getItem('wembley_active_sessions')) || {};
@@ -102,7 +109,7 @@
 
     async function syncOfflineLogs() {
       let offlineLogs = JSON.parse(localStorage.getItem('wembley_offline_logs')) || [];
-      if (offlineLogs.length === 0) return;
+      if (offlineLogs.length === 0 || !supabase) return;
 
       try {
         const { error } = await supabase.from('session_logs').insert(offlineLogs.map(log => {
@@ -114,11 +121,12 @@
           if(currentRole === 'admin') loadAdminDashboard();
         }
       } catch (e) {
-        console.log("Sync waiting...");
+        console.log("Sync failed...");
       }
     }
 
     async function loadAdminDashboard() {
+      if(!supabase) return;
       await syncOfflineLogs();
       const filter = document.getElementById('admin-time-filter').value;
       let dateLimit = new Date();
@@ -179,7 +187,7 @@
           html += `
             <div class="bg-slate-800 p-5 rounded-xl border border-indigo-500/50 shadow-lg">
               <div class="flex justify-between items-center mb-3">
-                <h3 class="text-xl font-bold">${st.name}</h3>
+                <h3 class="text-xl font-bold text-white">${st.name}</h3>
                 <span class="px-2.5 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">Live</span>
               </div>
               <p class="text-slate-400 text-sm">Game: <strong class="text-slate-200">${active.gameMode}</strong></p>
@@ -205,4 +213,3 @@
                   <button onclick="startSession('${st.id}', 'PS4', 'FC Match')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition font-semibold rounded-lg text-sm text-white">
                     Start FC Match (KSh ${settings.ps4_fc_rate})
                   </button>
-                  <button onclick="startSession('${st.id}', 'PS4', 'Time-Based (GTA/Racing)')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 transition font-semibold rounded-lg text-sm text-white">
