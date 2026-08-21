@@ -14,9 +14,26 @@ async function auth(role,u,p){try{const {data,error}=await sb.from("shop_credent
 async function saveCredential(u,p,role){const {error}=await sb.from("shop_credentials").upsert([{username:u,password_hash:await hash(p),role}],{onConflict:"username"});if(error)throw error}
 async function loadCloudSettings(){const {data,error}=await sb.from("shop_settings").select("settings").eq("id",1).maybeSingle();if(error)throw error;if(data?.settings){settings={...DEFAULT_SETTINGS,...data.settings};saveLocal()}}
 async function saveCloudSettings(){const {error}=await sb.from("shop_settings").upsert({id:1,settings,updated_at:new Date().toISOString()},{onConflict:"id"});if(error)throw error;saveLocal()}
-async function insertLog(log){const {error}=await sb.from("session_logs").insert([log]);if(error)throw error}
+async function insertLog(log){
+  const {local_id,_queue_id,...dbLog}=log;
+  const {error}=await sb.from("session_logs").insert([dbLog]);
+  if(error) throw error;
+}
 function queueLog(log){offlineLogs.push(log);saveLocal();syncBadge()}
-async function syncOfflineLogs(){if(!navigator.onLine)return;for(const log of [...offlineLogs]){try{await insertLog(log);offlineLogs=offlineLogs.filter(x=>x.local_id!==log.local_id);saveLocal()}catch(e){console.error(e);break}}syncBadge()}
+async function syncOfflineLogs(){
+  if(!navigator.onLine)return;
+  for(const log of [...offlineLogs]){
+    try{
+      await insertLog(log);
+      offlineLogs=offlineLogs.filter(x=>(x.local_id||x._queue_id)!==(log.local_id||log._queue_id));
+      saveLocal();
+    }catch(e){
+      console.error("Offline sync failed:",e);
+      break;
+    }
+  }
+  syncBadge();
+}
 function syncBadge(){document.querySelectorAll("[data-sync]").forEach(x=>x.textContent=offlineLogs.length?`🟠 ${offlineLogs.length} offline record(s)`:"🟢 Synced")}
 window.addEventListener("online",()=>{syncOfflineLogs();loadCloudSettings().catch(()=>{})});
 setInterval(()=>{syncOfflineLogs();loadCloudSettings().catch(()=>{})},30000);
